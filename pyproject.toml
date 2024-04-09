@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "nonebot-bison-migang"
-version = "0.1.5"
+version = "0.1.6"
 description = "Subscribe message from social medias"
 authors = ["mobai <mobai@mobai.one>"]
 license = "MIT"
@@ -37,9 +37,10 @@ pillow = ">=8.1,<11.0"
 pyjwt = "^2.1.0"
 python-socketio = "^5.4.0"
 tinydb = "^4.3.0"
-lxml = "^4.9.3"
 qrcode = "^7.4.2"
 pydantic = ">=1.10.0,<3.0.0,!=2.5.0,!=2.5.1"
+lxml = ">=5.1.0"
+yarl = ">=1.9.4"
 
 [tool.poetry.group.dev.dependencies]
 black = ">=23.7,<25.0"
@@ -48,18 +49,18 @@ isort = "^5.10.1"
 nonemoji = "^0.1.4"
 nb-cli = "^1.2.8"
 pre-commit = "^3.3.0"
-ruff = ">=0.0.278,<0.3.1"
+ruff = ">=0.0.278,<0.3.6"
 
 [tool.poetry.group.test.dependencies]
 flaky = "^3.7.0"
 nonebug = "^0.3.4"
 nonebug-saa = "^0.4.0"
-pytest = "^7.0.1"
+pytest = ">=7.0.1,<9.0.0"
 pytest-asyncio = ">=0.18.1,<0.24.0"
-pytest-cov = ">=3,<5"
+pytest-cov = ">=3,<6"
 pytest-mock = "^3.10.0"
 pytest-xdist = { extras = ["psutil"], version = "^3.1.0" }
-respx = "^0.20.0"
+respx = ">=0.20,<0.22"
 
 [tool.poetry.group.docker]
 optional = true
@@ -102,7 +103,7 @@ target-version = "py310"
 [tool.black]
 line-length = 120
 preview = true
-target-version = ["py310", "py311"]
+target-version = ["py310", "py311", "py312"]
 include = '\.pyi?$'
 extend-exclude = '''
 '''
