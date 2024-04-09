@@ -4,6 +4,7 @@ from typing import Any
 from datetime import datetime
 from urllib.parse import unquote
 
+from yarl import URL
 from lxml import etree
 from httpx import AsyncClient
 from nonebot.log import logger
@@ -129,7 +130,7 @@ class Weibo(NewMessage):
 
     def _get_text(self, raw_text: str) -> str:
         text = raw_text.replace("<br/>", "\n").replace("<br />", "\n")
-        selector = etree.HTML(text)
+        selector = etree.HTML(text, parser=None)
         if selector is None:
             return text
         url_elems = selector.xpath("//a[@href]/span[@class='surl-text']")
@@ -143,7 +144,7 @@ class Weibo(NewMessage):
                 and (url.startswith("https://weibo.cn/sinaurl?u=") or url.startswith("https://video.weibo.com"))
             ):
                 url = unquote(url.replace("https://weibo.cn/sinaurl?u=", ""))
-                elem.text = f"{elem.text}({url} )"
+                elem.text = f"{elem.text}( {url} )"
         return selector.xpath("string(.)")
 
     async def _get_long_weibo(self, weibo_id: str) -> dict:
@@ -161,27 +162,18 @@ class Weibo(NewMessage):
             logger.info(f"detail message error: https://m.weibo.cn/detail/{weibo_id}")
         return {}
 
-    async def parse(self, raw_post: RawPost) -> Post:
-        info = raw_post["mblog"]
-        retweeted = False
-        if info.get("retweeted_status"):
-            retweeted = True
+    async def _parse_weibo(self, info: dict) -> Post:
         if info["isLongText"] or info["pic_num"] > 9:
             info["text"] = (await self._get_long_weibo(info["mid"]))["text"]
         parsed_text = self._get_text(info["text"])
         raw_pics_list = info.get("pics", [])
-        if retweeted:
-            retweeted_status = info["retweeted_status"]
-            text = retweeted_status["text"]
-            raw_pics_list = retweeted_status.get("pics", [])
-            if retweeted_status["isLongText"] or retweeted_status["pic_num"] > 9:
-                retweeted_weibo = await self._get_long_weibo(retweeted_status["mid"])
-                text = retweeted_weibo["text"]
-                raw_pics_list = retweeted_weibo.get("pics", [])
-            parsed_text += (
-                f"\n=========转发=========\n>>转发@{retweeted_status['user']['screen_name']}\n{self._get_text(text)}"
-            )
         pic_urls = [img["large"]["url"] for img in raw_pics_list]
+        # 视频cover
+        if "page_info" in info and info["page_info"].get("type") == "video":
+            crop_url = info["page_info"]["page_pic"]["url"]
+            pic_urls.append(
+                f"{URL(crop_url).scheme}://{URL(crop_url).host}/large/{info['page_info']['page_pic']['pid']}"
+            )
         pics = []
         for pic_url in pic_urls:
             async with http_client(headers={"referer": "https://weibo.com"}) as client:
@@ -189,11 +181,11 @@ class Weibo(NewMessage):
                 res.raise_for_status()
                 pics.append(res.content)
         detail_url = f"https://weibo.com/{info['user']['id']}/{info['bid']}"
-        # return parsed_text, detail_url, pic_urls
-        return Post(
-            self,
-            parsed_text,
-            url=detail_url,
-            images=pics,
-            nickname=info["user"]["screen_name"],
-        )
+        return Post(self, parsed_text, url=detail_url, images=pics, nickname=info["user"]["screen_name"])
+
+    async def parse(self, raw_post: RawPost) -> Post:
+        info = raw_post["mblog"]
+        post = await self._parse_weibo(info)
+        if "retweeted_status" in info:
+            post.repost = await self._parse_weibo(info["retweeted_status"])
+        return post
