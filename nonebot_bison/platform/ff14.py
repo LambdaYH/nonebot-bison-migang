@@ -3,8 +3,8 @@ from typing import Any
 from httpx import AsyncClient
 
 from ..post import Post
-from ..utils import scheduler
 from .platform import NewMessage
+from ..utils import anonymous_site
 from ..types import Target, RawPost
 
 
@@ -16,7 +16,7 @@ class FF14(NewMessage):
     enabled = True
     is_common = False
     scheduler_class = "ff14"
-    scheduler = scheduler("interval", {"seconds": 60})
+    site = anonymous_site("interval", {"seconds": 60})
     has_target = False
 
     @classmethod
@@ -24,7 +24,8 @@ class FF14(NewMessage):
         return "最终幻想XIV官方公告"
 
     async def get_sub_list(self, _) -> list[RawPost]:
-        raw_data = await self.client.get(
+        client = await self.ctx.get_client()
+        raw_data = await client.get(
             "https://cqnews.web.sdo.com/api/news/newsList?gameCode=ff&CategoryCode=5309,5310,5311,5312,5313&pageIndex=0&pageSize=5"
         )
         return raw_data.json()["Data"]
@@ -43,4 +44,4 @@ class FF14(NewMessage):
         title = raw_post["Title"]
         text = raw_post["Summary"]
         url = raw_post["Author"]
-        return Post(self, text, title=title, url=url, nickname="最终幻想XIV官方公告")
+        return Post(self, content=text, title=title, url=url, nickname="最终幻想XIV官方公告")

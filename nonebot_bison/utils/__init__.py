@@ -8,25 +8,18 @@ from bs4 import BeautifulSoup as bs
 from nonebot.log import logger, default_format
 from nonebot_plugin_saa import Text, Image, MessageSegmentFactory
 
-from .http import http_client
-from .context import ProcessContext
+from .site import Site as Site
 from ..plugin_config import plugin_config
-from .scheduler_config import SchedulerConfig, scheduler
-from .image import pic_merge, text_to_image, is_pics_mergable, pic_url_to_image
-
-__all__ = [
-    "http_client",
-    "Singleton",
-    "parse_text",
-    "ProcessContext",
-    "html_to_text",
-    "SchedulerConfig",
-    "scheduler",
-    "pic_merge",
-    "pic_url_to_image",
-    "is_pics_mergable",
-    "text_to_image",
-]
+from .image import pic_merge as pic_merge
+from .http import http_client as http_client
+from .image import capture_html as capture_html
+from .site import ClientManager as ClientManager
+from .image import text_to_image as text_to_image
+from .site import anonymous_site as anonymous_site
+from .context import ProcessContext as ProcessContext
+from .image import is_pics_mergable as is_pics_mergable
+from .image import pic_url_to_image as pic_url_to_image
+from .site import DefaultClientManager as DefaultClientManager
 
 
 class Singleton(type):
@@ -99,10 +92,25 @@ if plugin_config.bison_filter_log:
     default_filter.level = ("DEBUG" if config.debug else "INFO") if config.log_level is None else config.log_level
 
 
-def text_similarity(str1, str2) -> float:
+def text_similarity(str1: str, str2: str) -> float:
     """利用最长公共子序列的算法判断两个字符串是否相似，并返回0到1.0的相似度"""
     if len(str1) == 0 or len(str2) == 0:
         raise ValueError("The length of string can not be 0")
     matcher = difflib.SequenceMatcher(None, str1, str2)
     t = sum(temp.size for temp in matcher.get_matching_blocks())
     return t / min(len(str1), len(str2))
+
+
+def decode_unicode_escapes(s: str):
+    """解码 \\r, \\n, \\t, \\uXXXX 等转义序列"""
+
+    def decode_match(match: re.Match[str]) -> str:
+        return bytes(match.group(0), "utf-8").decode("unicode_escape")
+
+    regex = re.compile(r"\\[rnt]|\\u[0-9a-fA-F]{4}")
+    return regex.sub(decode_match, s)
+
+
+def text_fletten(text: str, *, banned: str = "\n\r\t", replace: str = " ") -> str:
+    """将文本中的格式化字符去除"""
+    return "".join(c if c not in banned else replace for c in text)

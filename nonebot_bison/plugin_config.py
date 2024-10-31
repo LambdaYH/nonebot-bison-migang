@@ -2,6 +2,7 @@ import nonebot
 from yarl import URL
 from nonebot import get_plugin_config
 from pydantic import Field, BaseModel
+from nonebot.compat import PYDANTIC_V2, ConfigDict
 
 global_config = nonebot.get_driver().config
 PlatformName = str
@@ -9,12 +10,21 @@ ThemeName = str
 
 
 class PlugConfig(BaseModel):
+    if PYDANTIC_V2:
+        model_config = ConfigDict(populate_by_name=True)
+    else:
+
+        class Config:
+            allow_population_by_field_name = True
+
     bison_config_path: str = ""
     bison_use_pic: bool = Field(
         default=False,
         description="发送消息时将所有文本转换为图片，防止风控，仅需要推送文转图可以为 platform 指定 theme",
     )
-    bison_theme_use_browser: bool = Field(default=False, description="是否允许主题使用浏览器")
+    bison_use_browser: bool = Field(
+        default=False, description="是否使用环境中的浏览器", alias="bison_theme_use_browser"
+    )
     bison_init_filter: bool = True
     bison_use_queue: bool = True
     bison_outer_url: str = ""
@@ -26,7 +36,8 @@ class PlugConfig(BaseModel):
     bison_resend_times: int = 0
     bison_proxy: str | None = None
     bison_ua: str = Field(
-        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/51.0.2704.103 Safari/537.36",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)"
+        " Chrome/130.0.0.0 Safari/537.36 Edg/130.0.0.0",
         description="默认UA",
     )
     bison_show_network_warning: bool = True

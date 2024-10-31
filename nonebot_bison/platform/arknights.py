@@ -1,3 +1,5 @@
+import re
+import html
 from typing import Any
 from functools import partial
 
@@ -8,9 +10,10 @@ from pydantic import Field, BaseModel
 from nonebot.compat import type_validate_python
 
 from ..post import Post
+from ..utils import Site
 from ..types import Target, RawPost, Category
+from ..post.protocol import HTMLContentSupport
 from .platform import NewMessage, StatusChange
-from ..utils.scheduler_config import SchedulerConfig
 
 
 class ArkResponseBase(BaseModel):
@@ -52,10 +55,43 @@ class ArkBulletinResponse(ArkResponseBase):
     data: BulletinData
 
 
-class ArknightsSchedConf(SchedulerConfig):
+class ArknightsSite(Site):
     name = "arknights"
     schedule_type = "interval"
     schedule_setting = {"seconds": 120}
+
+
+class ArknightsPost(Post, HTMLContentSupport):
+    def _cleantext(self, text: str, old_split="\n", new_split="\n") -> str:
+        """清理文本：去掉所有多余的空格和换行"""
+        lines = text.strip().split(old_split)
+        cleaned_lines = [line.strip() for line in lines if line != ""]
+        return new_split.join(cleaned_lines)
+
+    async def get_html_content(self) -> str:
+        return self.content
+
+    async def get_plain_content(self) -> str:
+        content = html.unescape(self.content)  # 转义HTML特殊字符
+        content = re.sub(
+            r'\<p style="text-align:center;"\>(.*?)\<strong\>(.*?)\<span style=(.*?)\>(.*?)\<\/span\>(.*?)\<\/strong\>(.*?)<\/p\>',  # noqa: E501
+            r"==\4==\n",
+            content,
+            flags=re.DOTALL,
+        )  # 去“标题型”p
+        content = re.sub(
+            r'\<p style="text-align:(left|right);"?\>(.*?)\<\/p\>',
+            r"\2\n",
+            content,
+            flags=re.DOTALL,
+        )  # 去左右对齐的p
+        content = re.sub(r"\<p\>(.*?)\</p\>", r"\1\n", content, flags=re.DOTALL)  # 去普通p
+        content = re.sub(r'\<a href="(.*?)" target="_blank">(.*?)\<\/a\>', r"\1", content, flags=re.DOTALL)  # 去a
+        content = re.sub(r"<br/>", "\n", content)  # 去br
+        content = re.sub(r"\<strong\>(.*?)\</strong\>", r"\1", content)  # 去strong
+        content = re.sub(r'<span style="color:(#.*?)">(.*?)</span>', r"\2", content)  # 去color
+        content = re.sub(r'<div class="media-wrap image-wrap">(.*?)</div>', "", content)  # 去img
+        return self._cleantext(content)
 
 
 class Arknights(NewMessage):
@@ -65,7 +101,7 @@ class Arknights(NewMessage):
     enable_tag = False
     enabled = True
     is_common = False
-    scheduler = ArknightsSchedConf
+    site = ArknightsSite
     has_target = False
     default_theme = "arknights"
 
@@ -74,7 +110,8 @@ class Arknights(NewMessage):
         return "明日方舟游戏信息"
 
     async def get_sub_list(self, _) -> list[BulletinListItem]:
-        raw_data = await self.client.get("https://ak-webview.hypergryph.com/api/game/bulletinList?target=IOS")
+        client = await self.ctx.get_client()
+        raw_data = await client.get("https://ak-webview.hypergryph.com/api/game/bulletinList?target=IOS")
         return type_validate_python(ArkBulletinListResponse, raw_data.json()).data.list
 
     def get_id(self, post: BulletinListItem) -> Any:
@@ -91,9 +128,8 @@ class Arknights(NewMessage):
         return Category(1)
 
     async def parse(self, raw_post: BulletinListItem) -> Post:
-        raw_data = await self.client.get(
-            f"https://ak-webview.hypergryph.com/api/game/bulletin/{self.get_id(post=raw_post)}"
-        )
+        client = await self.ctx.get_client()
+        raw_data = await client.get(f"https://ak-webview.hypergryph.com/api/game/bulletin/{self.get_id(post=raw_post)}")
         data = type_validate_python(ArkBulletinResponse, raw_data.json()).data
 
         def title_escape(text: str) -> str:
@@ -108,7 +144,7 @@ class Arknights(NewMessage):
             # 只有一张图片
             title = title_escape(data.title)
 
-        return Post(
+        return ArknightsPost(
             self,
             content=data.content,
             title=title,
@@ -127,7 +163,7 @@ class AkVersion(StatusChange):
     enable_tag = False
     enabled = True
     is_common = False
-    scheduler = ArknightsSchedConf
+    site = ArknightsSite
     has_target = False
     default_theme = "brief"
 
@@ -136,8 +172,9 @@ class AkVersion(StatusChange):
         return "明日方舟游戏信息"
 
     async def get_status(self, _):
-        res_ver = await self.client.get("https://ak-conf.hypergryph.com/config/prod/official/IOS/version")
-        res_preanounce = await self.client.get(
+        client = await self.ctx.get_client()
+        res_ver = await client.get("https://ak-conf.hypergryph.com/config/prod/official/IOS/version")
+        res_preanounce = await client.get(
             "https://ak-conf.hypergryph.com/config/prod/announce_meta/IOS/preannouncement.meta.json"
         )
         res = res_ver.json()
@@ -171,7 +208,7 @@ class MonsterSiren(NewMessage):
     enable_tag = False
     enabled = True
     is_common = False
-    scheduler = ArknightsSchedConf
+    site = ArknightsSite
     has_target = False
 
     @classmethod
@@ -179,7 +216,8 @@ class MonsterSiren(NewMessage):
         return "明日方舟游戏信息"
 
     async def get_sub_list(self, _) -> list[RawPost]:
-        raw_data = await self.client.get("https://monster-siren.hypergryph.com/api/news")
+        client = await self.ctx.get_client()
+        raw_data = await client.get("https://monster-siren.hypergryph.com/api/news")
         return raw_data.json()["data"]["list"]
 
     def get_id(self, post: RawPost) -> Any:
@@ -192,8 +230,9 @@ class MonsterSiren(NewMessage):
         return Category(3)
 
     async def parse(self, raw_post: RawPost) -> Post:
+        client = await self.ctx.get_client()
         url = f'https://monster-siren.hypergryph.com/info/{raw_post["cid"]}'
-        res = await self.client.get(f'https://monster-siren.hypergryph.com/api/news/{raw_post["cid"]}')
+        res = await client.get(f'https://monster-siren.hypergryph.com/api/news/{raw_post["cid"]}')
         raw_data = res.json()
         content = raw_data["data"]["content"]
         content = content.replace("</p>", "</p>\n")
@@ -202,7 +241,7 @@ class MonsterSiren(NewMessage):
         text = f'{raw_post["title"]}\n{soup.text.strip()}'
         return Post(
             self,
-            text,
+            content=text,
             images=imgs,
             url=url,
             nickname="塞壬唱片新闻",
@@ -217,7 +256,7 @@ class TerraHistoricusComic(NewMessage):
     enable_tag = False
     enabled = True
     is_common = False
-    scheduler = ArknightsSchedConf
+    site = ArknightsSite
     has_target = False
     default_theme = "brief"
 
@@ -226,7 +265,8 @@ class TerraHistoricusComic(NewMessage):
         return "明日方舟游戏信息"
 
     async def get_sub_list(self, _) -> list[RawPost]:
-        raw_data = await self.client.get("https://terra-historicus.hypergryph.com/api/recentUpdate")
+        client = await self.ctx.get_client()
+        raw_data = await client.get("https://terra-historicus.hypergryph.com/api/recentUpdate")
         return raw_data.json()["data"]
 
     def get_id(self, post: RawPost) -> Any:
@@ -242,7 +282,7 @@ class TerraHistoricusComic(NewMessage):
         url = f'https://terra-historicus.hypergryph.com/comic/{raw_post["comicCid"]}/episode/{raw_post["episodeCid"]}'
         return Post(
             self,
-            raw_post["subtitle"],
+            content=raw_post["subtitle"],
             title=f'{raw_post["title"]} - {raw_post["episodeShortTitle"]}',
             images=[raw_post["coverUrl"]],
             url=url,

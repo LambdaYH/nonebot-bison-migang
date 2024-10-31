@@ -9,9 +9,9 @@ from nonebot_plugin_saa import Text, PlatformTarget, SupportedAdapters
 from ..types import Target
 from ..config import config
 from ..apis import check_sub_target
-from ..platform import Platform, platform_manager
 from ..config.db_config import SubscribeDupException
 from .utils import common_platform, ensure_user_info, gen_handle_cancel
+from ..platform import Platform, platform_manager, unavailable_paltforms
 
 
 def do_add_sub(add_sub: type[Matcher]):
@@ -39,6 +39,8 @@ def do_add_sub(add_sub: type[Matcher]):
         elif platform == "取消":
             await add_sub.finish("已中止订阅")
         elif platform in platform_manager:
+            if platform in unavailable_paltforms:
+                await add_sub.finish(f"无法订阅 {platform}，{unavailable_paltforms[platform]}")
             state["platform"] = platform
         else:
             await add_sub.reject("平台输入错误")
@@ -86,8 +88,10 @@ def do_add_sub(add_sub: type[Matcher]):
                 await add_sub.reject("id输入错误")
             state["id"] = raw_id_text
             state["name"] = name
-        except Platform.ParseTargetException:
-            await add_sub.reject("不能从你的输入中提取出id，请检查你输入的内容是否符合预期")
+        except Platform.ParseTargetException as e:
+            await add_sub.reject(
+                "不能从你的输入中提取出id，请检查你输入的内容是否符合预期" + (f"\n{e.prompt}" if e.prompt else "")
+            )
         else:
             await add_sub.send(
                 f"即将订阅的用户为:{state['platform']} {state['name']} {state['id']}\n如有错误请输入“取消”重新订阅"

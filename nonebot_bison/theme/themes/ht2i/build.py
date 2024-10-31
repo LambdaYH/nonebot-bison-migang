@@ -1,8 +1,11 @@
+from io import BytesIO
+from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
 from nonebot_plugin_saa import Text, Image, MessageSegmentFactory
 
 from nonebot_bison.theme import Theme, ThemeRenderError
+from nonebot_bison.post.protocol import HTMLContentSupport
 from nonebot_bison.utils import pic_merge, is_pics_mergable
 
 if TYPE_CHECKING:
@@ -28,16 +31,28 @@ class Ht2iTheme(Theme):
             raise ThemeRenderError(f"渲染文本失败: {e}")
 
     async def render(self, post: "Post"):
+
         md_text = ""
 
         md_text += f"## {post.title}\n\n" if post.title else ""
 
-        md_text += post.content if len(post.content) < 500 else f"{post.content[:500]}..."
+        if isinstance(post, HTMLContentSupport):
+            content = await post.get_html_content()
+        else:
+            content = await post.get_content()
+        md_text += content if len(content) < 500 else f"{content[:500]}..."
         md_text += "\n\n"
         if rp := post.repost:
             md_text += f"> 转发自 {f'**{rp.nickname}**' if rp.nickname else ''}:  \n"
             md_text += f"> {rp.title}  \n" if rp.title else ""
-            md_text += ">  \n> " + rp.content if len(rp.content) < 500 else f"{rp.content[:500]}..." + "  \n"
+            if isinstance(rp, HTMLContentSupport):
+                rp_content = await rp.get_html_content()
+            else:
+                rp_content = await rp.get_content()
+
+            md_text += (
+                ">  \n> " + rp_content if len(rp_content) < 500 else f"{rp_content[:500]}..." + "  \n"  # noqa: E501
+            )  # noqa: E501
         md_text += "\n\n"
 
         md_text += f"###### 来源: {post.platform.name} {post.nickname or ''}\n"
@@ -53,10 +68,17 @@ class Ht2iTheme(Theme):
         if urls:
             msgs.append(Text("\n".join(urls)))
 
+        pics_group: list[list[str | bytes | Path | BytesIO]] = []
         if post.images:
-            pics = post.images
+            pics_group.append(post.images)
+        if rp and rp.images:
+            pics_group.append(rp.images)
+
+        client = await post.platform.ctx.get_client_for_static()
+
+        for pics in pics_group:
             if is_pics_mergable(pics):
-                pics = await pic_merge(list(pics), post.platform.client)
+                pics = await pic_merge(list(pics), client)
             msgs.extend(map(Image, pics))
 
         return msgs

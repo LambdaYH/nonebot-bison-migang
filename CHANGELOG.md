@@ -2,7 +2,62 @@
 
 ## 最近更新
 
-- :arrow_up: auto update by pre-commit hooks [@pre-commit-ci](https://github.com/pre-commit-ci) ([#521](https://github.com/MountainDash/nonebot-bison/pull/521))
+### 新功能
+
+- :sparkles: 添加 Cookie 组件 [@suyiiyii](https://github.com/suyiiyii) ([#633](https://github.com/MountainDash/nonebot-bison/pull/633))
+
+## v0.9.5
+
+### 新功能
+
+- :sparkles: 更新默认UA为Windows平台 [@suyiiyii](https://github.com/suyiiyii) ([#643](https://github.com/MountainDash/nonebot-bison/pull/643))
+
+### Bug 修复
+
+- 🐛 修复微博更换长内容接口 [@phidiaLam](https://github.com/phidiaLam) ([#645](https://github.com/MountainDash/nonebot-bison/pull/645))
+- :bug: 修复B站获取匿名Cookie逻辑 [@suyiiyii](https://github.com/suyiiyii) ([#644](https://github.com/MountainDash/nonebot-bison/pull/644))
+
+### 文档
+
+- 📝 小刻食堂剪彩文档 [@phidiaLam](https://github.com/phidiaLam) ([#636](https://github.com/MountainDash/nonebot-bison/pull/636))
+
+## v0.9.4
+
+### Bug 修复
+
+- FSM 内部执行外部函数出现异常时不应崩溃 [@AzideCupric](https://github.com/AzideCupric) ([#616](https://github.com/MountainDash/nonebot-bison/pull/616))
+- 无权限用户尝试添加订阅时返回提示信息 [@suyiiyii](https://github.com/suyiiyii) ([#617](https://github.com/MountainDash/nonebot-bison/pull/617))
+- B站请求策略阶段行为优化 [@AzideCupric](https://github.com/AzideCupric) ([#610](https://github.com/MountainDash/nonebot-bison/pull/610))
+- Rss 不再删除格式化字符 [@suyiiyii](https://github.com/suyiiyii) ([#615](https://github.com/MountainDash/nonebot-bison/pull/615))
+- forbid adding platform that needs browser in no-browser env [@felinae98](https://github.com/felinae98) ([#609](https://github.com/MountainDash/nonebot-bison/pull/609))
+- 修正项目的代码警告 [@AzideCupric](https://github.com/AzideCupric) ([#614](https://github.com/MountainDash/nonebot-bison/pull/614))
+- 修复 anonymous_site() 无法正确工作的问题 [@felinae98](https://github.com/felinae98) ([#606](https://github.com/MountainDash/nonebot-bison/pull/606))
+
+## v0.9.3
+
+### 新功能
+
+- 适配小刻食堂平台 [@AzideCupric](https://github.com/AzideCupric) ([#379](https://github.com/MountainDash/nonebot-bison/pull/379))
+- refactor client getting logic in platform config [@felinae98](https://github.com/felinae98) ([#544](https://github.com/MountainDash/nonebot-bison/pull/544))
+- ParseTargetException可以携带prompt参数 [@AzideCupric](https://github.com/AzideCupric) ([#479](https://github.com/MountainDash/nonebot-bison/pull/479))
+- 为 scheduler config 添加 require_browser 属性 [@felinae98](https://github.com/felinae98) ([#542](https://github.com/MountainDash/nonebot-bison/pull/542))
+- 将 bison_theme_use_browser 更名为 bison_use_browser  [@felinae98](https://github.com/felinae98) ([#540](https://github.com/MountainDash/nonebot-bison/pull/540))
+
+### Bug 修复
+
+- Bilibili调度新增回避策略 [@AzideCupric](https://github.com/AzideCupric) ([#573](https://github.com/MountainDash/nonebot-bison/pull/573))
+- 实现 `Post.content` 相关扩展协议 [@GuGuMur](https://github.com/GuGuMur) ([#553](https://github.com/MountainDash/nonebot-bison/pull/553))
+- fix config alias err [@felinae98](https://github.com/felinae98) ([#580](https://github.com/MountainDash/nonebot-bison/pull/580))
+- 插入新的Schedulable时应传入use_batch参数 [@AzideCupric](https://github.com/AzideCupric) ([#594](https://github.com/MountainDash/nonebot-bison/pull/594))
+- 查询订阅时提示不存在的平台 [@suyiiyii](https://github.com/suyiiyii) ([#584](https://github.com/MountainDash/nonebot-bison/pull/584))
+- B站蹲饼修复 [@AzideCupric](https://github.com/AzideCupric) ([#525](https://github.com/MountainDash/nonebot-bison/pull/525))
+- 🐛 补充主题渲染时遗漏的转发推文中的图片 [@AzideCupric](https://github.com/AzideCupric) ([#554](https://github.com/MountainDash/nonebot-bison/pull/554))
+
+### 文档
+
+- 📝 更新 README [@KomoriDev](https://github.com/KomoriDev) ([#583](https://github.com/MountainDash/nonebot-bison/pull/583))
+- 💄 更新 favicon [@KomoriDev](https://github.com/KomoriDev) ([#585](https://github.com/MountainDash/nonebot-bison/pull/585))
+- 修复前端开发部分文档的问题 [@changsun20](https://github.com/changsun20) ([#552](https://github.com/MountainDash/nonebot-bison/pull/552))
 
 ## v0.9.2
 

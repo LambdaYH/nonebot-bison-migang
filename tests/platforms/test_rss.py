@@ -5,8 +5,8 @@ import xml.etree.ElementTree as ET
 import pytz
 import respx
 import pytest
+from httpx import Response
 from nonebug.app import App
-from httpx import Response, AsyncClient
 
 from .utils import get_file
 
@@ -14,7 +14,7 @@ if typing.TYPE_CHECKING:
     pass
 
 
-@pytest.fixture()
+@pytest.fixture
 def dummy_user(app: App):
     from nonebot_bison.types import User
 
@@ -22,7 +22,7 @@ def dummy_user(app: App):
     return user
 
 
-@pytest.fixture()
+@pytest.fixture
 def user_info_factory(app: App, dummy_user):
     from nonebot_bison.types import UserSubInfo
 
@@ -32,15 +32,15 @@ def user_info_factory(app: App, dummy_user):
     return _user_info
 
 
-@pytest.fixture()
+@pytest.fixture
 def rss(app: App):
-    from nonebot_bison.utils import ProcessContext
     from nonebot_bison.platform import platform_manager
+    from nonebot_bison.utils import ProcessContext, DefaultClientManager
 
-    return platform_manager["rss"](ProcessContext(), AsyncClient())
+    return platform_manager["rss"](ProcessContext(DefaultClientManager()))
 
 
-@pytest.fixture()
+@pytest.fixture
 def update_time_feed_1():
     file = get_file("rss-twitter-ArknightsStaff.xml")
     root = ET.fromstring(file)
@@ -53,7 +53,7 @@ def update_time_feed_1():
     return ET.tostring(root, encoding="unicode")
 
 
-@pytest.fixture()
+@pytest.fixture
 def update_time_feed_2():
     file = get_file("rss-ruanyifeng.xml")
     root = ET.fromstring(file)
@@ -88,9 +88,21 @@ async def test_fetch_new_1(
     assert post1.title is None
     assert (
         post1.content
-        == "【#統合戦略】 引き続き新テーマ「ミヅキと紺碧の樹」の新要素及びシステムの変更点を一部ご紹介します！"
-        " 今回は「灯火」、「ダイス」、「記号認識」、「鍵」についてです。詳細は添付の画像をご確認ください。"
-        "#アークナイツ https://t.co/ARmptV0Zvu"
+        == "【#統合戦略】 <br />引き続き新テーマ「ミヅキと紺碧の樹」の新要素及びシステムの変更点を一部ご紹介します！ "
+        "<br /><br />"
+        "今回は「灯火」、「ダイス」、「記号認識」、「鍵」についてです。<br />詳細は添付の画像をご確認ください。"
+        "<br /><br />"
+        "#アークナイツ https://t.co/ARmptV0Zvu<br />"
+        '<img src="https://pbs.twimg.com/media/FwZG9YAacAIXDw2?format=jpg&amp;name=orig" />'
+    )
+    plain_content = await post1.get_plain_content()
+    assert (
+        plain_content == "【#統合戦略】 \n"
+        "引き続き新テーマ「ミヅキと紺碧の樹」の新要素及びシステムの変更点を一部ご紹介します！ \n\n"
+        "今回は「灯火」、「ダイス」、「記号認識」、「鍵」についてです。\n"
+        "詳細は添付の画像をご確認ください。\n\n"
+        "#アークナイツ https://t.co/ARmptV0Zvu\n"
+        "[图片]"
     )
 
 
@@ -119,7 +131,7 @@ async def test_fetch_new_2(
     assert post1.content == "这里记录每周值得分享的科技内容，周五发布。..."
 
 
-@pytest.fixture()
+@pytest.fixture
 def update_time_feed_3():
     file = get_file("rss-github-atom.xml")
     root = ET.fromstring(file)
@@ -174,7 +186,9 @@ async def test_fetch_new_4(
     assert len(res2[0][1]) == 1
     post1 = res2[0][1][0]
     assert post1.url == "https://wallhaven.cc/w/85rjej"
-    assert post1.content == "85rjej.jpg"
+    assert post1.content == '<img alt="loading" class="lazyload" src="https://th.wallhaven.cc/small/85/85rjej.jpg" />'
+    plain_content = await post1.get_plain_content()
+    assert plain_content == "[图片]"
 
 
 def test_similar_text_process():

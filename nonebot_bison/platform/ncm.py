@@ -4,12 +4,12 @@ from typing import Any
 from httpx import AsyncClient
 
 from ..post import Post
+from ..utils import Site
 from .platform import NewMessage
-from ..utils import SchedulerConfig
 from ..types import Target, RawPost, ApiError
 
 
-class NcmSchedConf(SchedulerConfig):
+class NcmSite(Site):
     name = "music.163.com"
     schedule_type = "interval"
     schedule_setting = {"minutes": 60}
@@ -21,7 +21,7 @@ class NcmArtist(NewMessage):
     enable_tag = False
     enabled = True
     is_common = True
-    scheduler = NcmSchedConf
+    site = NcmSite
     name = "网易云-歌手"
     has_target = True
     parse_target_promot = "请输入歌手主页（包含数字ID）的链接"
@@ -44,10 +44,11 @@ class NcmArtist(NewMessage):
         elif match := re.match(r"(?:https?://)?music\.163\.com/#/artist\?id=(\d+)", target_text):
             return Target(match.group(1))
         else:
-            raise cls.ParseTargetException()
+            raise cls.ParseTargetException("正确格式:\n1. 歌手数字ID\n2. https://music.163.com/#/artist?id=xxxx")
 
     async def get_sub_list(self, target: Target) -> list[RawPost]:
-        res = await self.client.get(
+        client = await self.ctx.get_client()
+        res = await client.get(
             f"https://music.163.com/api/artist/albums/{target}",
             headers={"Referer": "https://music.163.com/"},
         )
@@ -68,7 +69,7 @@ class NcmArtist(NewMessage):
         target_name = raw_post["artist"]["name"]
         pics = [raw_post["picUrl"]]
         url = "https://music.163.com/#/album?id={}".format(raw_post["id"])
-        return Post(self, text, url=url, images=pics, nickname=target_name)
+        return Post(self, content=text, url=url, images=pics, nickname=target_name)
 
 
 class NcmRadio(NewMessage):
@@ -77,7 +78,7 @@ class NcmRadio(NewMessage):
     enable_tag = False
     enabled = True
     is_common = False
-    scheduler = NcmSchedConf
+    site = NcmSite
     name = "网易云-电台"
     has_target = True
     parse_target_promot = "请输入主播电台主页（包含数字ID）的链接"
@@ -101,10 +102,13 @@ class NcmRadio(NewMessage):
         elif match := re.match(r"(?:https?://)?music\.163\.com/#/djradio\?id=(\d+)", target_text):
             return Target(match.group(1))
         else:
-            raise cls.ParseTargetException()
+            raise cls.ParseTargetException(
+                prompt="正确格式:\n1. 电台数字ID\n2. https://music.163.com/#/djradio?id=xxxx"
+            )
 
     async def get_sub_list(self, target: Target) -> list[RawPost]:
-        res = await self.client.post(
+        client = await self.ctx.get_client()
+        res = await client.post(
             "http://music.163.com/api/dj/program/byradio",
             headers={"Referer": "https://music.163.com/"},
             data={"radioId": target, "limit": 1000, "offset": 0},
@@ -126,4 +130,4 @@ class NcmRadio(NewMessage):
         target_name = raw_post["radio"]["name"]
         pics = [raw_post["coverUrl"]]
         url = "https://music.163.com/#/program/{}".format(raw_post["id"])
-        return Post(self, text, url=url, images=pics, nickname=target_name)
+        return Post(self, content=text, url=url, images=pics, nickname=target_name)

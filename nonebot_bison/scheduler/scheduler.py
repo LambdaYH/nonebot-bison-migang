@@ -5,11 +5,14 @@ from nonebot.log import logger
 from nonebot_plugin_apscheduler import scheduler
 from nonebot_plugin_saa.utils.exceptions import NoBotFound
 
+from nonebot_bison.utils import ClientManager
+
 from ..config import config
 from ..send import send_msgs
 from ..types import Target, SubUnit
 from ..platform import platform_manager
-from ..utils import ProcessContext, SchedulerConfig
+from ..utils import Site, ProcessContext
+from ..utils.site import SkipRequestException
 
 
 @dataclass
@@ -24,10 +27,11 @@ class Scheduler:
     schedulable_list: list[Schedulable]  # for load weigth from db
     batch_api_target_cache: dict[str, dict[Target, list[Target]]]  # platform_name -> (target -> [target])
     batch_platform_name_targets_cache: dict[str, list[Target]]
+    client_mgr: ClientManager
 
     def __init__(
         self,
-        scheduler_config: type[SchedulerConfig],
+        scheduler_config: type[Site],
         schedulables: list[tuple[str, Target, bool]],  # [(platform_name, target, use_batch)]
         platform_name_list: list[str],
     ):
@@ -36,10 +40,11 @@ class Scheduler:
             logger.error(f"scheduler config [{self.name}] not found, exiting")
             raise RuntimeError(f"{self.name} not found")
         self.scheduler_config = scheduler_config
+        self.client_mgr = scheduler_config.client_mgr()
         self.scheduler_config_obj = self.scheduler_config()
 
         self.schedulable_list = []
-        self.batch_platform_name_targets_cache: dict[str, list[Target]] = defaultdict(list)
+        self.batch_platform_name_targets_cache = defaultdict(list)
         for platform_name, target, use_batch in schedulables:
             if use_batch:
                 self.batch_platform_name_targets_cache[platform_name].append(target)
@@ -83,16 +88,14 @@ class Scheduler:
         return cur_max_schedulable
 
     async def exec_fetch(self):
-        context = ProcessContext()
         if not (schedulable := await self.get_next_schedulable()):
             return
         logger.trace(f"scheduler {self.name} fetching next target: [{schedulable.platform_name}]{schedulable.target}")
 
-        client = await self.scheduler_config_obj.get_client(schedulable.target)
-        context.register_to_client(client)
+        context = ProcessContext(self.client_mgr)
 
         try:
-            platform_obj = platform_manager[schedulable.platform_name](context, client)
+            platform_obj = platform_manager[schedulable.platform_name](context)
             if schedulable.use_batch:
                 batch_targets = self.batch_api_target_cache[schedulable.platform_name][schedulable.target]
                 sub_units = []
@@ -105,6 +108,8 @@ class Scheduler:
                     schedulable.platform_name, schedulable.target
                 )
                 to_send = await platform_obj.do_fetch_new_post(SubUnit(schedulable.target, send_userinfo_list))
+        except SkipRequestException as err:
+            logger.debug(f"skip request: {err}")
         except Exception as err:
             records = context.gen_req_records()
             for record in records:
@@ -128,12 +133,13 @@ class Scheduler:
 
     def insert_new_schedulable(self, platform_name: str, target: Target):
         self.pre_weight_val += 1000
-        self.schedulable_list.append(Schedulable(platform_name, target, 1000))
+        new_schedulable = Schedulable(platform_name, target, 1000, platform_manager[platform_name].use_batch)
 
-        if platform_manager[platform_name].use_batch:
+        if new_schedulable.use_batch:
             self.batch_platform_name_targets_cache[platform_name].append(target)
             self._refresh_batch_api_target_cache()
 
+        self.schedulable_list.append(new_schedulable)
         logger.info(f"insert [{platform_name}]{target} to Schduler({self.scheduler_config.name})")
 
     def delete_schedulable(self, platform_name, target: Target):

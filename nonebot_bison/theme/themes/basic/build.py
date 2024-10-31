@@ -1,3 +1,5 @@
+from io import BytesIO
+from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
 from nonebot_plugin_saa import Text, Image, MessageSegmentFactory
@@ -22,12 +24,15 @@ class BasicTheme(Theme):
 
         text += f"{post.title}\n\n" if post.title else ""
 
-        text += post.content if len(post.content) < 500 else f"{post.content[:500]}..."
+        content = await post.get_plain_content()
+        text += content if len(content) < 500 else f"{content[:500]}..."
 
         if rp := post.repost:
             text += f"\n--------------\n转发自 {rp.nickname or ''}:\n"
             text += f"{rp.title}\n\n" if rp.title else ""
-            text += rp.content if len(rp.content) < 500 else f"{rp.content[:500]}..."
+            rp_content = await rp.get_plain_content()
+
+            text += rp_content if len(rp_content) < 500 else f"{rp_content[:500]}..."
 
         text += "\n--------------\n"
 
@@ -42,11 +47,18 @@ class BasicTheme(Theme):
         if urls:
             text += "\n".join(urls)
 
+        client = await post.platform.ctx.get_client_for_static()
         msgs: list[MessageSegmentFactory] = [Text(text)]
+
+        pics_group: list[list[str | bytes | Path | BytesIO]] = []
         if post.images:
-            pics = post.images
+            pics_group.append(post.images)
+        if rp and rp.images:
+            pics_group.append(rp.images)
+
+        for pics in pics_group:
             if is_pics_mergable(pics):
-                pics = await pic_merge(list(pics), post.platform.client)
+                pics = await pic_merge(list(pics), client)
             msgs.extend(map(Image, pics))
 
         return msgs

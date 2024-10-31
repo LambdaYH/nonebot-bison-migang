@@ -5,6 +5,8 @@ import sidebar from "./sidebar.js";
 export default hopeTheme({
   hostname: "https://nonebot-bison.netlify.app",
 
+  favicon: "favicon.ico",
+
   author: {
     name: "MountainDash Team",
     url: "https://github.com/orgs/MountainDash/teams",
@@ -78,6 +80,7 @@ export default hopeTheme({
       sup: true,
       tabs: true,
       vPre: true,
+      mermaid: true,
 
       // 在启用之前安装 chart.js
       // chart: true,
@@ -98,9 +101,6 @@ export default hopeTheme({
 
       // 在启用之前安装 mathjax-full
       // mathjax: true,
-
-      // 在启用之前安装 mermaid
-      // mermaid: true,
 
       // playground: {
       //   presets: ["ts", "vue"],

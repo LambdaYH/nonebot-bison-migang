@@ -11,7 +11,7 @@ from nonebot.log import logger
 from nonebot.compat import model_dump
 
 from ..scheduler.manager import init_scheduler
-from ..config.subs_io.nbesf_model import v1, v2
+from ..config.subs_io.nbesf_model import v1, v2, v3
 from ..config.subs_io import subscribes_export, subscribes_import
 
 try:
@@ -19,6 +19,7 @@ try:
 
     import anyio
     import click
+    from anyio import to_thread, from_thread
 except ImportError as e:  # pragma: no cover
     raise ImportError("请使用 `pip install nonebot-bison[cli]` 安装所需依赖") from e
 
@@ -39,7 +40,7 @@ R = TypeVar("R")
 def run_sync(func: Callable[P, R]) -> Callable[P, Coroutine[Any, Any, R]]:
     @wraps(func)
     async def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
-        return await anyio.to_thread.run_sync(partial(func, *args, **kwargs))
+        return await to_thread.run_sync(partial(func, *args, **kwargs))
 
     return wrapper
 
@@ -47,7 +48,7 @@ def run_sync(func: Callable[P, R]) -> Callable[P, Coroutine[Any, Any, R]]:
 def run_async(func: Callable[P, Coroutine[Any, Any, R]]) -> Callable[P, R]:
     @wraps(func)
     def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
-        return anyio.from_thread.run(partial(func, *args, **kwargs))
+        return from_thread.run(partial(func, *args, **kwargs))
 
     return wrapper
 
@@ -150,6 +151,8 @@ async def subs_import(path: str, format: str):
                 nbesf_data = v1.nbesf_parser(import_items)
             case 2:
                 nbesf_data = v2.nbesf_parser(import_items)
+            case 3:
+                nbesf_data = v3.nbesf_parser(import_items)
             case _:
                 raise NotImplementedError("不支持的NBESF版本")
 

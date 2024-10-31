@@ -2,19 +2,19 @@ from time import time
 
 import respx
 import pytest
+from httpx import Response
 from nonebug.app import App
-from httpx import Response, AsyncClient
 from nonebot.compat import model_dump, type_validate_python
 
 from .utils import get_file, get_json
 
 
-@pytest.fixture()
+@pytest.fixture
 def arknights(app: App):
-    from nonebot_bison.utils import ProcessContext
     from nonebot_bison.platform import platform_manager
+    from nonebot_bison.utils import ProcessContext, DefaultClientManager
 
-    return platform_manager["arknights"](ProcessContext(), AsyncClient())
+    return platform_manager["arknights"](ProcessContext(DefaultClientManager()))
 
 
 @pytest.fixture(scope="module")
@@ -44,9 +44,7 @@ def monster_siren_list_1():
 
 @respx.mock
 async def test_url_parse(app: App):
-    from httpx import AsyncClient
-
-    from nonebot_bison.utils import ProcessContext
+    from nonebot_bison.utils import ProcessContext, DefaultClientManager
     from nonebot_bison.platform.arknights import Arknights, BulletinData, BulletinListItem, ArkBulletinResponse
 
     cid_router = respx.get("https://ak-webview.hypergryph.com/api/game/bulletin/1")
@@ -93,7 +91,7 @@ async def test_url_parse(app: App):
     b4 = make_bulletin_obj("http://www.baidu.com")
     assert b4.jump_link == "http://www.baidu.com"
 
-    ark = Arknights(ProcessContext(), AsyncClient())
+    ark = Arknights(ProcessContext(DefaultClientManager()))
 
     cid_router.mock(return_value=make_response(b1))
     p1 = await ark.parse(make_bulletin_list_item_obj())
@@ -114,10 +112,10 @@ async def test_url_parse(app: App):
 
 @pytest.mark.asyncio()
 async def test_get_date_in_bulletin(app: App):
-    from nonebot_bison.utils import ProcessContext
+    from nonebot_bison.utils import ProcessContext, DefaultClientManager
     from nonebot_bison.platform.arknights import Arknights, BulletinListItem
 
-    arknights = Arknights(ProcessContext(), AsyncClient())
+    arknights = Arknights(ProcessContext(DefaultClientManager()))
     assert (
         arknights.get_date(
             BulletinListItem(
@@ -136,13 +134,13 @@ async def test_get_date_in_bulletin(app: App):
 @pytest.mark.asyncio()
 @respx.mock
 async def test_parse_with_breakline(app: App):
-    from nonebot_bison.utils import ProcessContext, http_client
+    from nonebot_bison.utils import ProcessContext, DefaultClientManager
     from nonebot_bison.platform.arknights import Arknights, BulletinListItem
 
     detail = get_json("arknights-detail-805")
     detail["data"]["header"] = ""
 
-    arknights = Arknights(ProcessContext(), http_client())
+    arknights = Arknights(ProcessContext(DefaultClientManager()))
 
     router = respx.get("https://ak-webview.hypergryph.com/api/game/bulletin/1")
     router.mock(return_value=Response(200, json=detail))
@@ -172,6 +170,7 @@ async def test_fetch_new(
 ):
     from nonebot_bison.post import Post
     from nonebot_bison.types import Target, SubUnit
+    from nonebot_bison.platform.arknights import ArknightsPost
 
     ak_list_router = respx.get("https://ak-webview.hypergryph.com/api/game/bulletinList?target=IOS")
     detail_router = respx.get("https://ak-webview.hypergryph.com/api/game/bulletin/5716")
@@ -203,7 +202,7 @@ async def test_fetch_new(
     res2 = await arknights.fetch_new_post(SubUnit(target, [dummy_user_subinfo]))
     assert len(res2[0][1]) == 1
     assert detail_router.called
-    post2: Post = res2[0][1][0]
+    post2: ArknightsPost = res2[0][1][0]
     assert post2.platform.platform_name == "arknights"
     assert post2.content
     assert post2.title == "2023「夏日嘉年华」限时活动即将开启"
@@ -214,7 +213,9 @@ async def test_fetch_new(
     assert post2.timestamp
     assert "arknights" == post2.get_priority_themes()[0]
     # assert(post.pics == ['https://ak-fs.hypergryph.com/announce/images/20210623/e6f49aeb9547a2278678368a43b95b07.jpg'])
-
+    post2_plain_content = await post2.get_plain_content()
+    assert post2_plain_content.strip() == get_file("arknights-plaintext-807.txt").strip()
+    assert await post2.generate()
     terra_list.mock(return_value=Response(200, json=get_json("terra-hist-1.json")))
     res3 = await arknights.fetch_new_post(SubUnit(target, [dummy_user_subinfo]))
     assert len(res3) == 1
@@ -238,8 +239,8 @@ async def test_send_with_render(
     monster_siren_list_0,
     monster_siren_list_1,
 ):
-    from nonebot_bison.post import Post
     from nonebot_bison.types import Target, SubUnit
+    from nonebot_bison.platform.arknights import ArknightsPost
 
     ak_list_router = respx.get("https://ak-webview.hypergryph.com/api/game/bulletinList?target=IOS")
     detail_router = respx.get("https://ak-webview.hypergryph.com/api/game/bulletin/8397")
@@ -269,12 +270,44 @@ async def test_send_with_render(
     res2 = await arknights.fetch_new_post(SubUnit(target, [dummy_user_subinfo]))
     assert len(res2[0][1]) == 1
     assert detail_router.called
-    post2: Post = res2[0][1][0]
+    post2: ArknightsPost = res2[0][1][0]
     assert post2.platform.platform_name == "arknights"
-    assert "《明日方舟》将于08月01日10:00 ~16:00的更新维护中对游戏内【公开招募】进行新增干员。" in post2.content
+    assert post2.content
+    post2_plain_content = await post2.get_plain_content()
+    assert post2_plain_content.strip() == get_file("arknights-plaintext-805.txt").strip()
+    assert await post2.generate()
     assert post2.title == "【公开招募】标签强制刷新通知"
     assert post2.nickname == "明日方舟游戏内公告"
     assert not post2.images
     # assert(post.pics == ['https://ak-fs.hypergryph.com/announce/images/20210623/e6f49aeb9547a2278678368a43b95b07.jpg'])
     r = await post2.generate_messages()
     assert r
+
+
+@pytest.mark.render()
+@respx.mock
+async def test_parse_title(
+    app: App,
+):
+    from nonebot_bison.utils import ProcessContext, DefaultClientManager
+    from nonebot_bison.platform.arknights import Arknights, BulletinListItem
+
+    detail_router = respx.get("https://ak-webview.hypergryph.com/api/game/bulletin/8397")
+
+    ark = Arknights(ProcessContext(DefaultClientManager()))
+
+    mock_detail = get_json("arknights-detail-805")
+    mock_detail["data"]["header"] = ""
+
+    detail_router.mock(return_value=Response(200, json=mock_detail))
+
+    mock_raw_post = BulletinListItem(
+        cid="8397",
+        title="【公开招募】\n标签刷新通知",
+        category=1,
+        displayTime="07-30 10:00:00",
+        updatedAt=1627582800,
+        sticky=False,
+    )
+    post = await ark.parse(mock_raw_post)
+    assert post.title == "【公开招募】 - 标签刷新通知"
