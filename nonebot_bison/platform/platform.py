@@ -14,8 +14,8 @@ from nonebot.log import logger
 from nonebot_plugin_saa import PlatformTarget
 
 from ..post import Post
+from ..utils import Site, ProcessContext
 from ..plugin_config import plugin_config
-from ..utils import ProcessContext, SchedulerConfig
 from ..types import Tag, Target, RawPost, SubUnit, Category
 
 
@@ -81,7 +81,7 @@ class PlatformABCMeta(PlatformMeta, ABC): ...
 
 
 class Platform(metaclass=PlatformABCMeta, base=True):
-    scheduler: type[SchedulerConfig]
+    site: type[Site]
     ctx: ProcessContext
     is_common: bool
     enabled: bool
@@ -92,7 +92,6 @@ class Platform(metaclass=PlatformABCMeta, base=True):
     platform_name: str
     parse_target_promot: str | None = None
     registry: list[type["Platform"]]
-    client: AsyncClient
     reverse_category: dict[str, Category]
     use_batch: bool = False
     # TODO: 限定可使用的theme名称
@@ -121,13 +120,16 @@ class Platform(metaclass=PlatformABCMeta, base=True):
         "actually function called"
         return await self.parse(raw_post)
 
-    def __init__(self, context: ProcessContext, client: AsyncClient):
+    def __init__(self, context: ProcessContext):
         super().__init__()
-        self.client = client
         self.ctx = context
 
     class ParseTargetException(Exception):
-        pass
+        def __init__(self, *args: object, prompt: str | None = None) -> None:
+            super().__init__(*args)
+
+            self.prompt = prompt
+            """用户输入提示信息"""
 
     @classmethod
     async def parse_target(cls, target_string: str) -> Target:
@@ -221,8 +223,8 @@ class Platform(metaclass=PlatformABCMeta, base=True):
 class MessageProcess(Platform, abstract=True):
     "General message process fetch, parse, filter progress"
 
-    def __init__(self, ctx: ProcessContext, client: AsyncClient):
-        super().__init__(ctx, client)
+    def __init__(self, ctx: ProcessContext):
+        super().__init__(ctx)
         self.parse_cache: dict[Any, Post] = {}
 
     @abstractmethod
@@ -410,13 +412,13 @@ class SimplePost(NewMessage, abstract=True):
 
     async def _handle_new_post(
         self,
-        new_posts: list[RawPost],
+        post_list: list[RawPost],
         sub_unit: SubUnit,
     ) -> list[tuple[PlatformTarget, list[Post]]]:
-        if not new_posts:
+        if not post_list:
             return []
         else:
-            for post in new_posts:
+            for post in post_list:
                 logger.info(
                     "fetch new post from {} {}: {}".format(
                         self.platform_name,
@@ -424,7 +426,7 @@ class SimplePost(NewMessage, abstract=True):
                         self.get_id(post),
                     )
                 )
-        res = await self.dispatch_user_post(new_posts, sub_unit)
+        res = await self.dispatch_user_post(post_list, sub_unit)
         self.parse_cache = {}
         return res
 
@@ -442,7 +444,7 @@ def make_no_target_group(platform_list: list[type[Platform]]) -> type[Platform]:
     name = DUMMY_STR
     categories_keys = set()
     categories = {}
-    scheduler = platform_list[0].scheduler
+    site = platform_list[0].site
 
     for platform in platform_list:
         if platform.has_target:
@@ -456,14 +458,14 @@ def make_no_target_group(platform_list: list[type[Platform]]) -> type[Platform]:
             raise RuntimeError(f"Platform categories for {platform_name} duplicate")
         categories_keys |= platform_category_key_set
         categories.update(platform.categories)
-        if platform.scheduler != scheduler:
+        if platform.site != site:
             raise RuntimeError(f"Platform scheduler for {platform_name} not fit")
 
-    def __init__(self: "NoTargetGroup", ctx: ProcessContext, client: AsyncClient):
-        Platform.__init__(self, ctx, client)
+    def __init__(self: "NoTargetGroup", ctx: ProcessContext):
+        Platform.__init__(self, ctx)
         self.platform_obj_list = []
         for platform_class in self.platform_list:
-            self.platform_obj_list.append(platform_class(ctx, client))
+            self.platform_obj_list.append(platform_class(ctx))
 
     def __str__(self: "NoTargetGroup") -> str:
         return "[" + " ".join(x.name for x in self.platform_list) + "]"
@@ -488,7 +490,7 @@ def make_no_target_group(platform_list: list[type[Platform]]) -> type[Platform]:
             "platform_name": platform_list[0].platform_name,
             "name": name,
             "categories": categories,
-            "scheduler": scheduler,
+            "site": site,
             "is_common": platform_list[0].is_common,
             "enabled": True,
             "has_target": False,

@@ -3,16 +3,18 @@ import json
 from typing import Any
 from datetime import datetime
 from urllib.parse import unquote
+from typing_extensions import override
 
 from yarl import URL
-from lxml import etree
+from lxml.etree import HTML
 from httpx import AsyncClient
 from nonebot.log import logger
 from bs4 import BeautifulSoup as bs
 
 from ..post import Post
 from .platform import NewMessage
-from ..utils import SchedulerConfig, http_client
+from ..utils import http_client, text_fletten
+from ..utils.site import Site, CookieClientManager
 from ..types import Tag, Target, RawPost, ApiError, Category
 
 _HEADER = {
@@ -35,10 +37,30 @@ _HEADER = {
 }
 
 
-class WeiboSchedConf(SchedulerConfig):
+class WeiboClientManager(CookieClientManager):
+    _site_name = "weibo.com"
+
+    async def _get_current_user_name(self, cookies: dict) -> str:
+        url = "https://m.weibo.cn/setup/nick/detail"
+        async with http_client() as client:
+            r = await client.get(url, headers=_HEADER, cookies=cookies)
+            data = json.loads(r.text)
+            name = data["data"]["user"]["screen_name"]
+            return name
+
+    @override
+    async def get_cookie_name(self, content: str) -> str:
+        """从cookie内容中获取cookie的友好名字，添加cookie时调用，持久化在数据库中"""
+        name = await self._get_current_user_name(json.loads(content))
+
+        return text_fletten(f"weibo: [{name[:10]}]")
+
+
+class WeiboSite(Site):
     name = "weibo.com"
     schedule_type = "interval"
     schedule_setting = {"seconds": 300}
+    client_mgr = WeiboClientManager
 
 
 class Weibo(NewMessage):
@@ -53,7 +75,7 @@ class Weibo(NewMessage):
     name = "新浪微博"
     enabled = True
     is_common = True
-    scheduler = WeiboSchedConf
+    site = WeiboSite
     has_target = True
     parse_target_promot = "请输入用户主页（包含数字UID）的链接"
 
@@ -75,11 +97,14 @@ class Weibo(NewMessage):
             # 都2202年了应该不会有http了吧，不过还是防一手
             return Target(match.group(1))
         else:
-            raise cls.ParseTargetException()
+            raise cls.ParseTargetException(prompt="正确格式:\n1. 用户数字UID\n2. https://weibo.com/u/xxxx")
 
     async def get_sub_list(self, target: Target) -> list[RawPost]:
+        client = await self.ctx.get_client(target)
+        header = {"Referer": f"https://m.weibo.cn/u/{target}", "MWeibo-Pwa": "1", "X-Requested-With": "XMLHttpRequest"}
+        # 获取 cookie 见 https://docs.rsshub.app/zh/deploy/config#%E5%BE%AE%E5%8D%9A
         params = {"containerid": "107603" + target}
-        res = await self.client.get("https://m.weibo.cn/api/container/getIndex?", params=params, timeout=4.0)
+        res = await client.get("https://m.weibo.cn/api/container/getIndex?", headers=header, params=params, timeout=4.0)
         res_data = json.loads(res.text)
         if not res_data["ok"] and res_data["msg"] != "这里还没有内容":
             raise ApiError(res.request.url)
@@ -130,7 +155,7 @@ class Weibo(NewMessage):
 
     def _get_text(self, raw_text: str) -> str:
         text = raw_text.replace("<br/>", "\n").replace("<br />", "\n")
-        selector = etree.HTML(text, parser=None)
+        selector = HTML(text, parser=None)
         if selector is None:
             return text
         url_elems = selector.xpath("//a[@href]/span[@class='surl-text']")
@@ -149,8 +174,9 @@ class Weibo(NewMessage):
 
     async def _get_long_weibo(self, weibo_id: str) -> dict:
         try:
-            weibo_info = await self.client.get(
-                "https://m.weibo.cn/statuses/show",
+            client = await self.ctx.get_client()
+            weibo_info = await client.get(
+                "https://m.weibo.cn/statuses/extend",
                 params={"id": weibo_id},
                 headers=_HEADER,
             )
@@ -164,7 +190,7 @@ class Weibo(NewMessage):
 
     async def _parse_weibo(self, info: dict) -> Post:
         if info["isLongText"] or info["pic_num"] > 9:
-            info["text"] = (await self._get_long_weibo(info["mid"]))["text"]
+            info["text"] = (await self._get_long_weibo(info["mid"]))["longTextContent"]
         parsed_text = self._get_text(info["text"])
         raw_pics_list = info.get("pics", [])
         pic_urls = [img["large"]["url"] for img in raw_pics_list]
@@ -181,7 +207,13 @@ class Weibo(NewMessage):
                 res.raise_for_status()
                 pics.append(res.content)
         detail_url = f"https://weibo.com/{info['user']['id']}/{info['bid']}"
-        return Post(self, parsed_text, url=detail_url, images=pics, nickname=info["user"]["screen_name"])
+        return Post(
+            self,
+            content=parsed_text,
+            url=detail_url,
+            images=pics,
+            nickname=info["user"]["screen_name"],
+        )
 
     async def parse(self, raw_post: RawPost) -> Post:
         info = raw_post["mblog"]

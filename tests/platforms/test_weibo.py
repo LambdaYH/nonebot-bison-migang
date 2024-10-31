@@ -16,12 +16,12 @@ if typing.TYPE_CHECKING:
 image_cdn_router = respx.route(host__regex=r"wx\d.sinaimg.cn", path__startswith="/large/")
 
 
-@pytest.fixture()
+@pytest.fixture
 def weibo(app: App):
-    from nonebot_bison.utils import ProcessContext
     from nonebot_bison.platform import platform_manager
+    from nonebot_bison.utils import ProcessContext, DefaultClientManager
 
-    return platform_manager["weibo"](ProcessContext(), AsyncClient())
+    return platform_manager["weibo"](ProcessContext(DefaultClientManager()))
 
 
 @pytest.fixture(scope="module")
@@ -45,7 +45,7 @@ async def test_fetch_new(weibo, dummy_user_subinfo):
     from nonebot_bison.types import Target, SubUnit
 
     ak_list_router = respx.get("https://m.weibo.cn/api/container/getIndex?containerid=1076036279793937")
-    detail_router = respx.get("https://m.weibo.cn/statuses/show?id=4649031014551911")
+    detail_router = respx.get("https://m.weibo.cn/statuses/extend?id=4649031014551911")
     ak_list_router.mock(return_value=Response(200, json=get_json("weibo_ak_list_0.json")))
     detail_router.mock(return_value=Response(200, text=get_file("weibo_detail_4649031014551911")))
     image_cdn_router.mock(Response(200, content=b""))
@@ -77,7 +77,7 @@ async def test_fetch_new(weibo, dummy_user_subinfo):
 @pytest.mark.asyncio
 @respx.mock
 async def test_fetch_repost(weibo):
-    repost_detail_router = respx.get("https://m.weibo.cn/statuses/show?id=4645748019299849")
+    repost_detail_router = respx.get("https://m.weibo.cn/statuses/extend?id=4645748019299849")
     repost_detail_router.mock(return_value=Response(200, text=get_file("weibo_detail_4645748019299849")))
     image_cdn_router.mock(Response(200, content=b""))
     raw_post = get_json("weibo_ak_list_1.json")["data"]["cards"][3]
@@ -121,7 +121,7 @@ async def test_fetch_repost(weibo):
 @pytest.mark.asyncio
 @respx.mock
 async def test_video_cover(weibo):
-    router = respx.get("https://m.weibo.cn/statuses/show?id=4645748019299849")
+    router = respx.get("https://m.weibo.cn/statuses/extend?id=4645748019299849")
     router.mock(return_value=Response(200, text=get_file("weibo_detail_4645748019299849")))
     image_cdn_router.mock(Response(200, content=b""))
     raw_post = get_json("weibo_ak_list_1.json")["data"]["cards"][0]
@@ -152,7 +152,7 @@ async def test_classification(weibo):
 @pytest.mark.asyncio
 @respx.mock
 async def test_parse_long(weibo):
-    detail_router = respx.get("https://m.weibo.cn/statuses/show?id=4645748019299849")
+    detail_router = respx.get("https://m.weibo.cn/statuses/extend?id=4645748019299849")
     detail_router.mock(return_value=Response(200, text=get_file("weibo_detail_4645748019299849")))
     raw_post = get_json("weibo_ak_list_1.json")["data"]["cards"][0]
     post = await weibo.parse(raw_post)
@@ -217,3 +217,14 @@ async def test_parse_target(weibo: "Weibo"):
     assert res == "6441489862"
     with pytest.raises(Platform.ParseTargetException):
         await weibo.parse_target("https://weibo.com/arknights")
+
+
+@respx.mock
+async def test_get_cookie_name(weibo: "Weibo"):
+    from nonebot_bison.platform.weibo import WeiboClientManager
+
+    router = respx.get("https://m.weibo.cn/setup/nick/detail")
+    router.mock(return_value=Response(200, json=get_json("weibo_get-cookie-name.json")))
+    weibo_client_mgr = WeiboClientManager()
+    name = await weibo_client_mgr.get_cookie_name("{}")
+    assert name == "weibo: [suyiiyii]"

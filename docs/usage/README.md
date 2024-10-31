@@ -1,6 +1,6 @@
 ---
 prev: /usage/install
-next: /usage/easy-use
+next: /usage/cookie
 ---
 
 # 全方位了解 Bison 的自行车
@@ -83,7 +83,7 @@ next: /usage/easy-use
 - `BISON_PROXY`: 使用的代理连接，形如`http://<ip>:<port>`（可选）
 - `BISON_UA`: 使用的 User-Agent，默认为 Chrome
 - `BISON_SHOW_NETWORK_WARNING`: 是否在日志中输出网络异常，默认为`True`
-- `BISON_THEME_USE_BROWSER`: 是否使用浏览器渲染主题，某些主题可能需要浏览器渲染 (htmlrender)，默认为`False`
+- `BISON_USE_BROWSER`: 环境中是否存在浏览器，某些主题或者平台需要浏览器，默认为`False`
 - `BISON_PLATFORM_THEME`: 为[平台](#平台)指定渲染用[主题](#主题)，用于渲染推送消息，默认为`{}`
   ::: details BISON_PLATFORM_THEME 配置项示例
 
@@ -271,6 +271,21 @@ Bison 在处理每条推送时，会按照以下规则顺序检查推送中的 T
    - 如果推送中的每一个 Tag 都不存在于 **需订阅 Tag** 列表中，则**丢弃**该推送，检查结束
 3. **需订阅 Tag** 列表为空
    - **发送**该推送到群中，检查结束
+
+#### Cookie 功能
+
+Bison 支持携带 Cookie 进行请求。
+
+目前支持的平台有：
+
+- `rss`: RSS
+- `weibo`: 新浪微博
+
+::: warning 使用须知
+Cookie 全局生效，这意味着，通过你的 Cookie 获取到的内容，可能会被发给其他用户。
+:::
+
+管理员可以通过**命令**或**管理后台**给 Bison 设置 Cookie。
 
 <script setup lang="ts">
 import { ref, computed } from 'vue';

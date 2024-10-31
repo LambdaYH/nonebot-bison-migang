@@ -9,13 +9,32 @@ from bs4 import BeautifulSoup as bs
 from ..post import Post
 from .platform import NewMessage
 from ..types import Target, RawPost
-from ..utils import SchedulerConfig, text_similarity
+from ..utils import text_similarity
+from ..utils.site import Site, CookieClientManager
 
 
-class RssSchedConf(SchedulerConfig):
+class RssSite(Site):
     name = "rss"
     schedule_type = "interval"
     schedule_setting = {"seconds": 30}
+    client_mgr = CookieClientManager.from_name(name)
+
+
+class RssPost(Post):
+
+    async def get_plain_content(self) -> str:
+        soup = bs(self.content, "html.parser")
+
+        for img in soup.find_all("img"):
+            img.replace_with("[图片]")
+
+        for br in soup.find_all("br"):
+            br.replace_with("\n")
+
+        for p in soup.find_all("p"):
+            p.insert_after("\n")
+
+        return soup.get_text()
 
 
 class Rss(NewMessage):
@@ -25,7 +44,7 @@ class Rss(NewMessage):
     name = "Rss"
     enabled = True
     is_common = True
-    scheduler = RssSchedConf
+    site = RssSite
     has_target = True
 
     @classmethod
@@ -46,7 +65,8 @@ class Rss(NewMessage):
         return post.id
 
     async def get_sub_list(self, target: Target) -> list[RawPost]:
-        res = await self.client.get(target, timeout=10.0)
+        client = await self.ctx.get_client(target)
+        res = await client.get(target, timeout=10.0)
         feed = feedparser.parse(res)
         entries = feed.entries
         for entry in entries:
@@ -64,16 +84,16 @@ class Rss(NewMessage):
     async def parse(self, raw_post: RawPost) -> Post:
         title = raw_post.get("title", "")
         soup = bs(raw_post.description, "html.parser")
-        desc = soup.text.strip()
+        desc = raw_post.description
         title, desc = self._text_process(title, desc)
         pics = [x.attrs["src"] for x in soup("img")]
         if raw_post.get("media_content"):
             for media in raw_post["media_content"]:
                 if media.get("medium") == "image" and media.get("url"):
                     pics.append(media.get("url"))
-        return Post(
+        return RssPost(
             self,
-            desc,
+            content=desc,
             title=title,
             url=raw_post.link,
             images=pics,

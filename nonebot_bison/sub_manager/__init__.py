@@ -14,6 +14,10 @@ from nonebot.adapters.onebot.v11.event import PrivateMessageEvent
 from .add_sub import do_add_sub
 from .del_sub import do_del_sub
 from .query_sub import do_query_sub
+from .add_cookie import do_add_cookie
+from .del_cookie import do_del_cookie
+from .add_cookie_target import do_add_cookie_target
+from .del_cookie_target import do_del_cookie_target
 from .utils import common_platform, admin_permission, gen_handle_cancel, configurable_to_me, set_target_user_info
 
 add_sub_matcher = on_command(
@@ -42,6 +46,46 @@ del_sub_matcher = on_command(
 del_sub_matcher.handle()(set_target_user_info)
 do_del_sub(del_sub_matcher)
 
+add_cookie_matcher = on_command(
+    "添加cookie",
+    aliases={"添加Cookie"},
+    rule=to_me(),
+    permission=SUPERUSER,
+    priority=5,
+    block=True,
+)
+do_add_cookie(add_cookie_matcher)
+
+add_cookie_target_matcher = on_command(
+    "关联cookie",
+    aliases={"关联Cookie"},
+    rule=to_me(),
+    permission=SUPERUSER,
+    priority=5,
+    block=True,
+)
+do_add_cookie_target(add_cookie_target_matcher)
+
+del_cookie_target_matcher = on_command(
+    "取消关联cookie",
+    aliases={"取消关联Cookie"},
+    rule=to_me(),
+    permission=SUPERUSER,
+    priority=5,
+    block=True,
+)
+do_del_cookie_target(del_cookie_target_matcher)
+
+del_cookie_matcher = on_command(
+    "删除cookie",
+    aliases={"删除Cookie"},
+    rule=to_me(),
+    permission=SUPERUSER,
+    priority=5,
+    block=True,
+)
+do_del_cookie(del_cookie_matcher)
+
 group_manage_matcher = on_command("群管理", rule=to_me(), permission=SUPERUSER, priority=4, block=True)
 
 group_handle_cancel = gen_handle_cancel(group_manage_matcher, "已取消")
@@ -68,9 +112,6 @@ async def do_choose_group_number(state: T_State, event: PrivateMessageEvent, gro
     idx = int(group_idx)
     if idx not in group_number_idx.keys():
         await group_manage_matcher.reject("请输入正确序号")
-    state["group_idx"] = idx
-    group_number_idx: dict[int, int] = state["group_number_idx"]
-    idx: int = state["group_idx"]
     group_id = group_number_idx[idx]
     state["target_user_info"] = TargetQQGroup(group_id=group_id)
 
@@ -111,10 +152,29 @@ async def do_dispatch_command(
     asyncio.create_task(new_matcher_ins.run(bot, event, state))
 
 
+no_permission_matcher = on_command(
+    "添加订阅",
+    rule=configurable_to_me,
+    aliases={"删除订阅", "群管理", "管理后台", "添加cookie", "删除cookie", "关联cookie", "取消关联cookie"},
+    priority=8,
+    block=True,
+)
+
+
+@no_permission_matcher.handle()
+async def send_no_permission():
+    await no_permission_matcher.finish("您没有权限进行此操作，请联系 Bot 管理员")
+
+
 __all__ = [
     "common_platform",
     "add_sub_matcher",
     "query_sub_matcher",
     "del_sub_matcher",
     "group_manage_matcher",
+    "no_permission_matcher",
+    "add_cookie_matcher",
+    "add_cookie_target_matcher",
+    "del_cookie_target_matcher",
+    "del_cookie_matcher",
 ]

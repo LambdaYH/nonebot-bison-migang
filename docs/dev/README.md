@@ -1,3 +1,8 @@
+---
+prev: /usage/install
+next: /dev/cookie
+---
+
 # 基本开发须知
 
 ## 语言以及工具
@@ -19,7 +24,7 @@
 1. 在`.env.dev`中添加`BISON_OUTER_URL`配置项
 
    ```env
-   BISON_OUTER_URL="http://localhost:3000/bison/"`
+   BISON_OUTER_URL="http://localhost:3000/bison/"
    ```
 
 2. 运行 bot
@@ -31,8 +36,8 @@
 3. 运行前端：
 
    ```bash
-   cd admin_fronted
-   pnpm dev
+   cd admin-frontend
+   pnpm start
    ```
 
 ::: warning
@@ -300,7 +305,7 @@ RawPost 通过`Platform.parse`函数处理成 Post，然后通过`Theme.render`�
 
 Bison 在启动时会尝试注册所有在`nonebot_bison/theme/themes`下的主题，如果你的主题在这个目录下，并指定了 `__theme_meta__`，那么它会被自动注册。
 
-若配置项`BISON_THEME_USE_BROWSER=false`，则在注册的主题需要浏览器渲染，即`need_browser`字段为`True`时，会发出注册警告
+若配置项`BISON_USE_BROWSER=false`，则在注册的主题需要浏览器渲染，即`need_browser`字段为`True`时，会发出注册警告
 
 同时，你也可以手动调用`nonebot_bison.theme.theme_manager.register`来注册主题
 
